@@ -17,7 +17,14 @@ from app.state.store import StateStore
 
 async def main(config_path: str | None = None) -> int:
     cfg = load_config(config_path)
-    adapter, info = await select_adapter(cfg.runtime, cfg.timeout)
+    try:
+        adapter, info = await select_adapter(cfg.runtime, cfg.timeout)
+    except Exception as exc:
+        payload = {"status": "LIVE_QWEN_REQUIRED", "message": "未发现可用的本地 Qwen Runtime；请启动 Ollama、LM Studio 或 llama.cpp 后重试。", "error": str(exc)}
+        Path("data").mkdir(exist_ok=True)
+        Path("data/smoke-result.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 4
     if info.model_family != "qwen":
         print(json.dumps({"status": "MODEL_NOT_QWEN", "info": info.__dict__}, ensure_ascii=False, indent=2))
         return 2
@@ -37,4 +44,3 @@ if __name__ == "__main__":
     parser.add_argument("--config")
     args = parser.parse_args()
     raise SystemExit(asyncio.run(main(args.config)))
-
