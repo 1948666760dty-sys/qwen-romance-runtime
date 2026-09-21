@@ -7,6 +7,7 @@ from .base import RuntimeInfo
 class LlamaCppAdapter(OpenAICompatibleAdapter):
     def __init__(self, base_url: str, timeout_seconds: float = 10.0):
         super().__init__(base_url, "llamacpp", timeout_seconds)
+        self.generation_parameter = "n_predict"
 
     async def probe(self) -> RuntimeInfo:
         info = await super().probe()
@@ -27,6 +28,11 @@ class LlamaCppAdapter(OpenAICompatibleAdapter):
     async def count_tokens(self, messages):
         try:
             prompt = "\n".join(f"{m.get('role','user')}: {m.get('content','')}" for m in messages)
+            try:
+                applied = await self._json("POST", "/apply-template", json={"messages": messages})
+                prompt = str(applied.get("prompt") or applied.get("content") or prompt)
+            except Exception:
+                pass
             payload = await self._json("POST", "/tokenize", json={"content": prompt})
             tokens = payload.get("tokens")
             if isinstance(tokens, list):
@@ -38,4 +44,3 @@ class LlamaCppAdapter(OpenAICompatibleAdapter):
     async def generate(self, messages, max_new_tokens, sampling=None, cancel_event=None):
         result = await super().generate(messages, max_new_tokens, sampling, cancel_event)
         return result
-
