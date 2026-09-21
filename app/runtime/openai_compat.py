@@ -13,6 +13,7 @@ class OpenAICompatibleAdapter(RuntimeAdapter):
         self.backend = backend
         self._model: ModelInfo | None = None
         self._context_length = 32768
+        self.generation_parameter = "max_tokens"
 
     async def _json(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         import httpx
@@ -51,7 +52,7 @@ class OpenAICompatibleAdapter(RuntimeAdapter):
             await self.probe()
         started = time.monotonic()
         body: dict[str, Any] = {"model": self._model.model_id if self._model else None, "messages": messages,
-                                "stream": False, "max_tokens": max_new_tokens}
+                                "stream": False, self.generation_parameter: max_new_tokens}
         if sampling:
             body.update(sampling)
         data = await self._json("POST", "/v1/chat/completions", json=body)
@@ -63,4 +64,3 @@ class OpenAICompatibleAdapter(RuntimeAdapter):
         if cancel_event and cancel_event.is_set():
             reason = "cancel"
         return GenerationResult(text, int(usage.get("prompt_tokens", 0) or 0), int(usage.get("completion_tokens", 0) or 0), reason, reason == "limit", int((time.monotonic() - started) * 1000))
-
