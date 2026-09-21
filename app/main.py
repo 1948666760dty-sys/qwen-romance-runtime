@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,7 @@ def create_app(config: AppConfig | None = None):
     app.state.store = store
     app.state.loader = loader
     app.state.controllers: dict[str, LongOutputController] = {}
+    app.state.tasks: dict[str, tuple[LongOutputController, asyncio.Task]] = {}
 
     class SessionRequest(BaseModel):
         title: str = "Qwen Romance Session"
@@ -78,7 +80,13 @@ def create_app(config: AppConfig | None = None):
             raise HTTPException(422, "session_id and message are required")
         try:
             controller = await controller_for(str(body["session_id"]))
-            result = await controller.generate(ChatRequest(str(body["session_id"]), str(body["message"]), str(body.get("run_mode", "interactive")), body.get("length")))
+            request = ChatRequest(str(body["session_id"]), str(body["message"]), str(body.get("run_mode", "interactive")), body.get("length"))
+            if body.get("async") is True:
+                job_id = str(uuid.uuid4())
+                task = asyncio.create_task(controller.generate(request, job_id=job_id))
+                app.state.tasks[job_id] = (controller, task)
+                return {"job_id": job_id, "status": "running"}
+            result = await controller.generate(request)
             return result.__dict__
         except PermissionError as exc:
             raise HTTPException(409, str(exc)) from exc
@@ -116,10 +124,27 @@ def create_app(config: AppConfig | None = None):
 
     @app.post("/api/generation/{job_id}/cancel")
     async def cancel(job_id: str):
+        if job_id in app.state.tasks:
+            controller, _ = app.state.tasks[job_id]
+            cancelled = await controller.cancel(job_id)
+            return {"cancelled": cancelled, "job_id": job_id}
         for controller in app.state.controllers.values():
             if await controller.cancel(job_id):
                 return {"cancelled": True, "job_id": job_id}
         raise HTTPException(404, "JOB_NOT_FOUND")
+
+    @app.get("/api/generation/{job_id}")
+    async def generation_status(job_id: str):
+        if job_id not in app.state.tasks:
+            raise HTTPException(404, "JOB_NOT_FOUND")
+        _, task = app.state.tasks[job_id]
+        if not task.done():
+            return {"job_id": job_id, "status": "running"}
+        try:
+            result = task.result()
+            return {"job_id": job_id, "status": "complete", "result": result.__dict__}
+        except Exception as exc:
+            return {"job_id": job_id, "status": "error", "error": str(exc)}
 
     @app.get("/")
     async def index():
