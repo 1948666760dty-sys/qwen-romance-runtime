@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Qwen Romance Runtime</title><link rel="stylesheet" href="/static/style.css"></head>
+<body>
+<main>
+  <header><h1>Qwen Romance Runtime</h1><span id="health">检查中…</span></header>
+  <section class="toolbar"><label>Session <input id="session" placeholder="先点击新建"></label><button id="new">新建会话</button><select id="length"><option value="long">Long</option><option value="very_long">Very Long</option><option value="normal">Normal</option><option value="short">Short</option></select><button id="probe">探测 Runtime</button></section>
+  <pre id="runtime" class="debug"></pre>
+  <section id="chat" class="chat"></section>
+  <form id="form"><textarea id="message" placeholder="输入消息，例如：继续小说模式，一次多写一点"></textarea><button type="submit">生成</button><button type="button" id="stop">停止</button></form>
+</main>
+<script src="/static/app.js"></script>
+</body></html>

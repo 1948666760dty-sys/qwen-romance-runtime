@@ -1,0 +1,31 @@
+server:
+  host: 127.0.0.1
+  port: 8765
+runtime:
+  backend: auto
+  ollama:
+    base_url: http://127.0.0.1:11434
+  lmstudio:
+    base_url: http://127.0.0.1:1234
+  llamacpp:
+    base_url: http://127.0.0.1:8080
+model_gate:
+  require_local: true
+  require_qwen: true
+  fail_closed: true
+generation:
+  max_internal_chunks: 4
+  interactive_default: long
+  novel_default: very_long
+  context_safety_ratio: 0.15
+  minimum_reserve_tokens: 256
+  chunk_retry_count: 1
+timeout:
+  connect_seconds: 10
+  stream_idle_seconds: 120
+  chunk_max_seconds: 1200
+state:
+  database: ./data/runtime.db
+skills:
+  cache_dir: ./data/cache/skills
+
