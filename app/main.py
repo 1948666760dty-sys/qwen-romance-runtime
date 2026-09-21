@@ -87,6 +87,33 @@ def create_app(config: AppConfig | None = None):
         except Exception as exc:
             raise HTTPException(502, f"RUNTIME_ERROR: {exc}") from exc
 
+    @app.post("/v1/chat/completions")
+    async def openai_compatible_chat(body: dict[str, Any] = Body(...)):
+        """OpenAI-shaped local compatibility endpoint; it never changes provider=local/family=qwen."""
+        messages = body.get("messages") or []
+        user_messages = [m for m in messages if m.get("role") == "user"]
+        if not user_messages:
+            raise HTTPException(422, "messages must contain a user message")
+        session_id = body.get("session_id")
+        if not session_id:
+            session_id = store.create_session(str(body.get("run_mode", "interactive")), "OpenAI-compatible Qwen session").id
+        prompt = str(user_messages[-1].get("content", ""))
+        try:
+            controller = await controller_for(str(session_id))
+            result = await controller.generate(ChatRequest(str(session_id), prompt, str(body.get("run_mode", "interactive")), body.get("length")))
+        except PermissionError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(502, f"RUNTIME_ERROR: {exc}") from exc
+        return {
+            "id": result.message_id,
+            "object": "chat.completion",
+            "model": body.get("model", "local-qwen"),
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": result.text}, "finish_reason": "stop" if not result.partial else "length"}],
+            "usage": {"prompt_tokens": 0, "completion_tokens": result.generated_tokens, "total_tokens": result.generated_tokens},
+            "qwen_runtime": {"provider": "local", "family": "qwen", "chunks": result.chunks, "chars": result.chars, "partial": result.partial},
+        }
+
     @app.post("/api/generation/{job_id}/cancel")
     async def cancel(job_id: str):
         for controller in app.state.controllers.values():
