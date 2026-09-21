@@ -44,6 +44,8 @@ python scripts/smoke_test.py
 - `POST /api/sessions` with `{ "title": "...", "run_mode": "interactive" }`
 - `GET /api/sessions/{id}`
 - `POST /api/chat` with `{ "session_id": "...", "message": "继续", "length": "long", "run_mode": "interactive" }`
+- `POST /api/chat` with the same body plus `"async": true` returns a `job_id` for polling/cancellation
+- `GET /api/generation/{job_id}`
 - `POST /api/generation/{job_id}/cancel`
 
 The controller uses one `asyncio.Semaphore` for model work. Chunk retry, partial output retention, cancellation, boundary overlap removal, context budget reserve, and SQLite checkpointing are code paths rather than prompt promises.
@@ -57,4 +59,3 @@ python -m pytest
 The unit and mock-integration tests cover model gating, task-scoped length commands, dynamic budget failure before overflow, overlap merging, premature closure detection, deterministic event IDs, SQLite uniqueness, multi-Chunk persistence, and non-Qwen Skill-loader isolation. Live tests are intentionally separate and only run when a local endpoint is present.
 
 The rules remain canonical in [`agent-skills`](https://github.com/1948666760dty-sys/agent-skills); this runtime reads the cached copy instead of requesting GitHub on every generation.
-

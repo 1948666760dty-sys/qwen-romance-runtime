@@ -62,11 +62,11 @@ class LongOutputController:
         await self.adapter.close_generation()
         return True
 
-    async def generate(self, request: ChatRequest, state_extractor: Callable[[str], dict[str, Any]] | None = None) -> ChatResponse:
+    async def generate(self, request: ChatRequest, state_extractor: Callable[[str], dict[str, Any]] | None = None, job_id: str | None = None) -> ChatResponse:
         async with self.semaphore:
-            return await self._generate_locked(request, state_extractor)
+            return await self._generate_locked(request, state_extractor, job_id)
 
-    async def _generate_locked(self, request: ChatRequest, state_extractor=None) -> ChatResponse:
+    async def _generate_locked(self, request: ChatRequest, state_extractor=None, job_id: str | None = None) -> ChatResponse:
         info = await self.adapter.probe()
         gate = qwen_model_gate(info)
         if not gate.allowed:
@@ -80,7 +80,7 @@ class LongOutputController:
             mode, profile = request.length, PROFILES[request.length]
         history_rows = self.store.db.execute("SELECT role,content FROM messages WHERE session_id=? ORDER BY created_at", (session.id,)).fetchall()
         history = [{"role": row["role"], "content": row["content"]} for row in history_rows]
-        job = GenerationJob()
+        job = GenerationJob(job_id or str(uuid.uuid4()))
         self.jobs[job.id] = job
         visible = ""
         seam_corrections = 0

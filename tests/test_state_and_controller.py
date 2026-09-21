@@ -72,3 +72,31 @@ def test_non_qwen_rejected_before_skill_load(tmp_path):
         assert "MODEL_NOT_QWEN" in str(exc)
         return
     assert False, "non-Qwen must be rejected before the Skill Loader"
+
+
+def test_controller_cancel_preserves_partial_state(tmp_path):
+    cache = tmp_path / "cache" / "qwen-romance"
+    cache.mkdir(parents=True)
+    skill = cache / "SKILL.md"
+    skill.write_text("version: 0.2.0\n", encoding="utf-8")
+    import hashlib, json
+    (tmp_path / "cache" / "manifest.json").write_text(json.dumps({"qwen-romance":{"version":"0.2.0","sha256":hashlib.sha256(skill.read_bytes()).hexdigest()}}), encoding="utf-8")
+
+    class Slow(FakeAdapter):
+        async def generate(self, messages, max_new_tokens, sampling=None, cancel_event=None):
+            while not cancel_event.is_set():
+                await asyncio.sleep(0.005)
+            return GenerationResult("已生成的部分", 10, 5, "cancel")
+
+    async def run():
+        store = StateStore(tmp_path / "runtime.db")
+        session = store.create_session()
+        controller = LongOutputController(Slow([]), store, SkillLoader(tmp_path / "cache"), GenerationConfig(max_internal_chunks=4, minimum_chunk_tokens=1))
+        task = asyncio.create_task(controller.generate(ChatRequest(session.id, "继续"), job_id="cancel-job"))
+        await asyncio.sleep(0.02)
+        assert await controller.cancel("cancel-job")
+        result = await task
+        assert result.partial is True
+        assert "已生成的部分" in result.text
+
+    asyncio.run(run())
